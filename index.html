@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Tracking Perpindahan Majelis</title>
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    
+    <script src="https://code.jquery.com/jquery-3.6.4.min.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+    
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f4f6f9;
+            color: #333;
+        }
+        .container { max-width: 1600px; margin: 0 auto; }
+        header {
+            margin-bottom: 20px;
+            background: #1e293b;
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        header h1 { margin: 0; font-size: 24px; }
+        header p { margin: 5px 0 0 0; color: #cbd5e1; font-size: 14px; }
+        
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: 380px 1fr;
+            gap: 20px;
+        }
+        .sidebar {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            height: fit-content;
+        }
+        .filter-group { margin-bottom: 15px; }
+        .filter-group label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 6px;
+            color: #475569;
+            font-size: 13px;
+        }
+        
+        .select2-container--default .select2-selection--single {
+            height: 40px !important;
+            padding: 5px !important;
+            border: 1px solid #cbd5e1 !important;
+            border-radius: 6px !important;
+        }
+        .select2-container--default .select2-selection--single .select2-selection__arrow { top: 7px !important; }
+        
+        .stats-card {
+            background: #f0fdf4;
+            border: 1px solid #bbf7d0;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 15px;
+            text-align: center;
+        }
+        .stats-card h4 { margin: 0; color: #166534; font-size: 13px; }
+        .stats-card .value { font-size: 24px; font-weight: bold; color: #15803d; margin-top: 5px; }
+        
+        .main-content { display: flex; flex-direction: column; gap: 20px; }
+        
+        /* Container Map */
+        #map {
+            height: 550px;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            border: 1px solid #e2e8f0;
+            z-index: 1;
+        }
+        
+        /* Label Nama Cabang */
+        .custom-point-label {
+            background: rgba(255, 255, 255, 0.95);
+            border: 1px solid #2563eb;
+            color: #0f172a;
+            font-weight: bold;
+            font-size: 11px;
+            padding: 2px 6px;
+            border-radius: 4px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        /* Pin Nomor Urut */
+        .step-number-icon {
+            background-color: #ef4444;
+            color: white;
+            border: 2px solid white;
+            border-radius: 50%;
+            text-align: center;
+            font-weight: bold;
+            font-size: 13px;
+            line-height: 24px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+        }
+
+        /* Tanda Panah */
+        .arrow-marker-icon {
+            color: #f59e0b;
+            font-size: 22px;
+            font-weight: bold;
+            text-shadow: 0px 0px 3px #000;
+            text-align: center;
+            line-height: 30px;
+        }
+
+        .table-panel {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            border: 1px solid #e2e8f0;
+        }
+        .table-panel h3 { margin: 0 0 15px 0; font-size: 16px; color: #1e293b; }
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #e2e8f0; }
+        th { background-color: #f8fafc; color: #64748b; font-weight: 600; }
+        tr:hover { background-color: #f8fafc; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <h1>Dashboard Tracking Perpindahan Majelis</h1>
+        <p>Histori Riwayat Perpindahan Majelis di Cabang</p>
+    </header>
+
+    <div class="dashboard-grid">
+        <div class="sidebar">
+            <div class="filter-group">
+                <label for="filterMajelisId">Ketik & Cari ID Majelis</label>
+                <select id="filterMajelisId" class="searchable-select">
+                    <option value="all">-- Tampilkan Semua Data --</option>
+                </select>
+            </div>
+            
+            <div class="stats-card">
+                <h4>Total Transaksi Terfilter</h4>
+                <div id="totalCount" class="value">0</div>
+            </div>
+        </div>
+
+        <div class="main-content">
+            <div id="map"></div>
+            
+            <div class="table-panel">
+                <h3>Log Histori Perpindahan Kronologis</h3>
+                <div style="overflow-x: auto;">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Urutan</th>
+                                <th>Nama Majelis</th>
+                                <th>Majelis ID</th>
+                                <th>Area</th>
+                                <th>Cabang Awal</th>
+                                <th>Cabang Tujuan</th>
+                                <th>Target BP Tujuan</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<script>
+    // 1. KAMUS MASTER LOKASI TITIK GEOGRAFIS KOORDINAT
+    const masterKoordinat = {
+        "01 Tobo": [-7.1523, 111.6945],
+        "Ngasem 2": [-7.1894, 111.7512],
+        "Temayang": [-7.2941, 111.8904],
+        "Boureno": [-7.1294, 112.1124],
+        "Kapas": [-7.1432, 111.9215],
+        "Wonotirto": [-8.2432, 112.1543],
+        "Kesamben": [-8.1214, 112.3541],
+        "01 Nglegok": [-8.0215, 112.1894],
+        "Wlingi": [-8.0894, 112.3124],
+        "01 Sidoarjo": [-7.4478, 112.7183],
+        "Gedangan": [-7.3821, 112.7245],
+        "Taman 1": [-7.3512, 112.6804],
+        "TALANG KELAPA": [-2.9124, 104.7214],
+        "SUKARAMI": [-2.9341, 104.7012],
+        "ILIR TIMUR": [-2.9456, 104.7512],
+        "GANDUS": [-2.9612, 104.6645]
+    };
+
+    // 2. DATA DARI TRANS-LOG DATASET SHEET1 CSV ASLI [cite: 1, 7, 8]
+    // Ditambahkan beberapa baris estafet simulasi kronologis pada ID 1000183346 dan 1000069320 untuk pengujian urutan.
+    const dataPerpindahan = [
+        { nama: "Nga Ngasem 01", area: "Bojonegoro", id: "1000183346", awal: "01 Tobo", tujuan: "Ngasem 2", bp: "yunia septiana" },
+        { nama: "Nga Ngasem 01", area: "Bojonegoro", id: "1000183346", awal: "Ngasem 2", tujuan: "Temayang", bp: "yunia septiana" },
+        { nama: "Nga Ngasem 01", area: "Bojonegoro", id: "1000183346", awal: "Temayang", tujuan: "Kapas", bp: "DIMAS ARIF NUR ACHAMDIN" },
+        
+        { nama: "Nga Bareng Badong", area: "Bojonegoro", id: "1000301421", awal: "01 Tobo", tujuan: "Ngasem 2", bp: "yunia septiana" },
+        { nama: "Nga Sendangharjo 01", area: "Bojonegoro", id: "1000183347", awal: "01 Tobo", tujuan: "Ngasem 2", bp: "yunia septiana" },
+        { nama: "Nga Ngasem 05", area: "Bojonegoro", id: "1000304583", awal: "01 Tobo", tujuan: "Ngasem 2", bp: "yunia septiana" },
+        { nama: "Collection Nga Bareng 08", area: "Bojonegoro", id: "1000033278", awal: "01 Tobo", tujuan: "Ngasem 2", bp: "yunia septiana" },
+        { nama: "Nga Katur Wonopuro 1", area: "Bojonegoro", id: "1000327511", awal: "01 Tobo", tujuan: "Temayang", bp: "yunia septiana" },
+        
+        { nama: "Kdm Tlogoagung Tlogoagung 1", area: "Bojonegoro", id: "1000280808", awal: "Boureno", tujuan: "Kapas", bp: "DIMAS ARIF NUR ACHAMDIN" },
+        { nama: "Kdm Kedungadem Kedungadem 2", area: "Bojonegoro", id: "1000278713", awal: "Boureno", tujuan: "Kapas", bp: "DIMAS ARIF NUR ACHAMDIN" },
+        { nama: "Kdm Dayukidul Wedegan Kidul 1", area: "Bojonegoro", id: "1000275205", awal: "Boureno", tujuan: "Kapas", bp: "DIMAS ARIF NUR ACHAMDIN" },
+        { nama: "Kdm Pejok Bronjong 1", area: "Bojonegoro", id: "1000289923", awal: "Boureno", tujuan: "Kapas", bp: "DIMAS ARIF NUR ACHAMDIN" },
+        
+        { nama: "Sbrj Pekuwon 4", area: "Bojonegoro", id: "1000169312", awal: "Kapas", tujuan: "Boureno", bp: "HENI HIDAYAH" },
+        { nama: "Sbrj Pekuwon 2", area: "Bojonegoro", id: "1000033843", awal: "Kapas", tujuan: "Boureno", bp: "HENI HIDAYAH" },
+        
+        { nama: "Stj_kaulon 02", area: "Blitar", id: "1000172473", awal: "Wonotirto", tujuan: "Kesamben", bp: "Yoga Aditia" },
+        { nama: "Stjn_kalipang 02", area: "Blitar", id: "1000126645", awal: "01 Nglegok", tujuan: "Wonotirto", bp: "Devi Puspitasari" },
+        { nama: "Stjn_jingglong 01", area: "Blitar", id: "1000080711", awal: "01 Nglegok", tujuan: "Wonotirto", bp: "Devi Puspitasari" },
+        { nama: "Slo_ploso_05", area: "Blitar", id: "1000289123", awal: "Wlingi", tujuan: "Kesamben", bp: "Laili Fitriana" },
+        
+        { nama: "137 Tgn Magersari 4", area: "Sidoarjo", id: "1000029709", awal: "01 Sidoarjo", tujuan: "Gedangan", bp: "Sheren Regina Virdhao" },
+        { nama: "Gdn Jl Bagus Santri", area: "Sidoarjo", id: "1000306973", awal: "Gedangan", tujuan: "Taman 1", bp: "Sri Ajeng Shofi Lestari" },
+        { nama: "277 Skd_jumputrejo_02", area: "Sidoarjo", id: "1000294390", awal: "Taman 1", tujuan: "Gedangan", bp: "Sheren Regina Virdhao" },
+        
+        { nama: "126 Skm Sukodadi Masjid Dakwah", area: "Palembang 2", id: "1000069320", awal: "SUKARAMI", tujuan: "TALANG KELAPA", bp: "Apreliza" },
+        { nama: "126 Skm Sukodadi Masjid Dakwah", area: "Palembang 2", id: "1000069320", awal: "TALANG KELAPA", tujuan: "GANDUS", bp: "Dwi Lorenza" },
+        { nama: "224 Tlk Kenten Kenten Laut 001", area: "Palembang 2", id: "1000158715", awal: "TALANG KELAPA", tujuan: "SUKARAMI", bp: "Novita Enjel" }
+    ];
+
+    // 3. INITIALIZE ENGINE LEAFLET MAP
+    const map = L.map('map').setView([-2.5, 118], 5);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { 
+        attribution: '© OpenStreetMap contributors' 
+    }).addTo(map);
+    
+    let pathLayerGroup = L.layerGroup().addTo(map);
+
+    // 4. LOAD FLOW CONTROLLER WHEN DOCUMENT READY
+    $(document).ready(function() {
+        populateDropdown();
+        $('.searchable-select').select2({ width: '100%' });
+        
+        $('#filterMajelisId').on('change', function() {
+            updateDashboard(this.value);
+        });
+
+        updateDashboard('all');
+    });
+
+    function populateDropdown() {
+        const uniqueIds = [...new Set(dataPerpindahan.map(item => item.id))];
+        uniqueIds.forEach(id => {
+            const itemData = dataPerpindahan.find(d => d.id === id);
+            $('#filterMajelisId').append(new Option(`${id} - ${itemData.nama}`, id));
+        });
+    }
+
+    // 5. CORE LOGIC RENDER COMPONENT DASHBOARD
+    function updateDashboard(selectedId) {
+        pathLayerGroup.clearLayers();
+        $('#tableBody').empty();
+
+        let filtered = dataPerpindahan.filter(item => {
+            return selectedId === 'all' || item.id.toString() === selectedId.toString();
+        });
+
+        $('#totalCount').text(filtered.length);
+        if (filtered.length === 0) return;
+
+        let bounds = [];
+        let labelSudahDigambar = new Set(); // Mengunci duplikasi agar label teks hanya 1 kali muncul per point
+
+        filtered.forEach((item, index) => {
+            let stepNumber = index + 1;
+            
+            // Injeksi row data ke log tabel kronologi
+            let row = `<tr>
+                <td><span style="background:#ef4444; color:white; padding:3px 8px; border-radius:50%; font-weight:bold;">${stepNumber}</span></td>
+                <td>${item.nama}</td>
+                <td><b>${item.id}</b></td>
+                <td>${item.area}</td>
+                <td>${item.awal}</td>
+                <td>${item.tujuan}</td>
+                <td>${item.bp}</td>
+            </tr>`;
+            $('#tableBody').append(row);
+
+            // Tarik data lat/long dari lookup kamus master koordinat
+            const ptAwal = masterKoordinat[item.awal];
+            const ptTujuan = masterKoordinat[item.tujuan];
+
+            if (ptAwal && ptTujuan) {
+                bounds.push(ptAwal, ptTujuan);
+
+                // Buat Object Icon Nomor Urut Bulat Merah
+                let numIconAsal = L.divIcon({
+                    className: 'step-number-icon',
+                    html: stepNumber,
+                    iconSize: [26, 26],
+                    iconAnchor: [13, 13]
+                });
+
+                let numIconTujuan = L.divIcon({
+                    className: 'step-number-icon',
+                    html: stepNumber + "⁺",
+                    iconSize: [26, 26],
+                    iconAnchor: [13, 13]
+                });
+
+                // Cek Validasi Unik Label Asal
+                if (!labelSudahDigambar.has(item.awal)) {
+                    L.marker(ptAwal, {icon: numIconAsal})
+                        .addTo(pathLayerGroup)
+                        .bindTooltip(`${item.awal}`, { permanent: true, direction: 'top', className: 'custom-point-label' });
+                    labelSudahDigambar.add(item.awal);
+                }
+
+                // Cek Validasi Unik Label Tujuan
+                if (!labelSudahDigambar.has(item.tujuan)) {
+                    L.marker(ptTujuan, {icon: numIconTujuan})
+                        .addTo(pathLayerGroup)
+                        .bindTooltip(`${item.tujuan}`, { permanent: true, direction: 'bottom', className: 'custom-point-label' });
+                    labelSudahDigambar.add(item.tujuan);
+                }
+
+                // Cetak Jalur Garis Solid Biru Jelas Tegas
+                L.polyline([ptAwal, ptTujuan], {
+                    color: '#2563eb',
+                    weight: 5,
+                    opacity: 0.9
+                }).addTo(pathLayerGroup);
+
+                // Rumus Hitung Sudut Rotasi Mata Panah (➔) Secara Otomatis
+                let midLat = (ptAwal[0] + ptTujuan[0]) / 2;
+                let midLng = (ptAwal[1] + ptTujuan[1]) / 2;
+                
+                let dy = ptTujuan[0] - ptAwal[0];
+                let dx = ptTujuan[1] - ptAwal[1];
+                let angle = Math.atan2(dy, dx) * (180 / Math.PI); 
+                let cssRotation = -angle; 
+
+                let arrowIcon = L.divIcon({
+                    className: 'arrow-marker-wrapper',
+                    html: `<div class="arrow-marker-icon" style="transform: rotate(${cssRotation}deg);">➔</div>`,
+                    iconSize: [30, 30],
+                    iconAnchor: [15, 15]
+                });
+
+                L.marker([midLat, midLng], { icon: arrowIcon, interactive: false }).addTo(pathLayerGroup);
+            }
+        });
+
+        // Auto fitting cakupan zoom maps agar pas membingkai rute
+        if (bounds.length > 0) {
+            map.fitBounds(bounds, { padding: [60, 60] });
+        }
+    }
+</script>
+</body>
+</html>
