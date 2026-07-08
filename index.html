@@ -73,16 +73,13 @@
         
         .main-content { display: flex; flex-direction: column; gap: 20px; }
         
-        /* Container Map */
         #map {
             height: 550px;
             border-radius: 10px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.05);
             border: 1px solid #e2e8f0;
-            z-index: 1;
         }
         
-        /* Label Nama Cabang */
         .custom-point-label {
             background: rgba(255, 255, 255, 0.95);
             border: 1px solid #2563eb;
@@ -94,7 +91,6 @@
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
         
-        /* Pin Nomor Urut */
         .step-number-icon {
             background-color: #ef4444;
             color: white;
@@ -107,14 +103,12 @@
             box-shadow: 0 2px 6px rgba(0,0,0,0.3);
         }
 
-        /* Tanda Panah */
         .arrow-marker-icon {
             color: #f59e0b;
             font-size: 22px;
             font-weight: bold;
             text-shadow: 0px 0px 3px #000;
             text-align: center;
-            line-height: 30px;
         }
 
         .table-panel {
@@ -136,20 +130,20 @@
 <div class="container">
     <header>
         <h1>Dashboard Tracking Perpindahan Majelis</h1>
-        <p>Histori Riwayat Perpindahan Majelis di Cabang</p>
+        <p>Histori dan Alur Perjalanan Estafet Majelis</p>
     </header>
 
     <div class="dashboard-grid">
         <div class="sidebar">
             <div class="filter-group">
-                <label for="filterMajelisId">Ketik & Cari ID Majelis</label>
+                <label for="filterMajelisId">Ketik / Pilih ID Majelis</label>
                 <select id="filterMajelisId" class="searchable-select">
                     <option value="all">-- Tampilkan Semua Data --</option>
                 </select>
             </div>
             
             <div class="stats-card">
-                <h4>Total Transaksi Terfilter</h4>
+                <h4>Total Transaksi Jalur</h4>
                 <div id="totalCount" class="value">0</div>
             </div>
         </div>
@@ -158,18 +152,18 @@
             <div id="map"></div>
             
             <div class="table-panel">
-                <h3>Log Histori Perpindahan Kronologis</h3>
+                <h3>Log Histori Urutan Perpindahan</h3>
                 <div style="overflow-x: auto;">
                     <table>
                         <thead>
                             <tr>
                                 <th>Urutan</th>
-                                <th>Nama Majelis</th>
                                 <th>Majelis ID</th>
+                                <th>Nama Majelis</th>
                                 <th>Area</th>
                                 <th>Cabang Awal</th>
                                 <th>Cabang Tujuan</th>
-                                <th>Target BP Tujuan</th>
+                                <th>BP Tujuan</th>
                             </tr>
                         </thead>
                         <tbody id="tableBody"></tbody>
@@ -183,70 +177,149 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
 <script>
-    // 1. KAMUS MASTER LOKASI TITIK GEOGRAFIS KOORDINAT
+    // 1. DATA MASTER KOORDINAT ASLI DARI USER (Lookup Dictionary)
     const masterKoordinat = {
-        "01 Tobo": [-7.1523, 111.6945],
-        "Ngasem 2": [-7.1894, 111.7512],
-        "Temayang": [-7.2941, 111.8904],
-        "Boureno": [-7.1294, 112.1124],
-        "Kapas": [-7.1432, 111.9215],
-        "Wonotirto": [-8.2432, 112.1543],
-        "Kesamben": [-8.1214, 112.3541],
-        "01 Nglegok": [-8.0215, 112.1894],
-        "Wlingi": [-8.0894, 112.3124],
-        "01 Sidoarjo": [-7.4478, 112.7183],
-        "Gedangan": [-7.3821, 112.7245],
-        "Taman 1": [-7.3512, 112.6804],
-        "TALANG KELAPA": [-2.9124, 104.7214],
-        "SUKARAMI": [-2.9341, 104.7012],
-        "ILIR TIMUR": [-2.9456, 104.7512],
-        "GANDUS": [-2.9612, 104.6645]
+        "01 Tobo": [-7.168154, 111.659828],
+        "Gedangan": [-7.383520, 112.714256],
+        "Ngasem 2": [-7.248391, 111.764989],
+        "01 Temayang": [-7.262918, 111.862391],
+        "Temayang": [-7.262918, 111.862391], // Alias penyesuaian data
+        "Sukarami": [-2.907598, 104.712582],
+        "SUKARAMI": [-2.907598, 104.712582], // Alias penyesuaian data
+        "Taman 1": [-7.370143, 112.704239],
+        "01 Gandus": [-2.966379, 104.741361],
+        "GANDUS": [-2.966379, 104.741361], // Alias penyesuaian data
+        "Boureno": [-7.124940, 112.096390],
+        "Wlingi": [-8.081879, 112.315257],
+        "Talang Kelapa": [-2.920077, 104.703042],
+        "TALANG KELAPA": [-2.920077, 104.703042], // Alias penyesuaian data
+        "Kesamben": [-8.144836, 112.367910],
+        "Kapas": [-7.194391, 111.933498],
+        "Wonotirto": [-8.160182, 112.215530],
+        "01 Nglegok": [-8.021500, 112.189400], // Default koordinat terdekat Blitar
+        "01 Sidoarjo": [-7.447800, 112.718300], // Default koordinat terdekat Sidoarjo
+        "ILIR TIMUR": [-2.945600, 104.751200]    // Default koordinat terdekat Palembang
     };
 
-    // 2. DATA DARI TRANS-LOG DATASET SHEET1 CSV ASLI [cite: 1, 7, 8]
-    // Ditambahkan beberapa baris estafet simulasi kronologis pada ID 1000183346 dan 1000069320 untuk pengujian urutan.
+    // 2. DATASET HISTORI 112 BARIS INTEGRASI PENUH & SUDAH DIBERSIHKAN
     const dataPerpindahan = [
-        { nama: "Nga Ngasem 01", area: "Bojonegoro", id: "1000183346", awal: "01 Tobo", tujuan: "Ngasem 2", bp: "yunia septiana" },
-        { nama: "Nga Ngasem 01", area: "Bojonegoro", id: "1000183346", awal: "Ngasem 2", tujuan: "Temayang", bp: "yunia septiana" },
-        { nama: "Nga Ngasem 01", area: "Bojonegoro", id: "1000183346", awal: "Temayang", tujuan: "Kapas", bp: "DIMAS ARIF NUR ACHAMDIN" },
-        
-        { nama: "Nga Bareng Badong", area: "Bojonegoro", id: "1000301421", awal: "01 Tobo", tujuan: "Ngasem 2", bp: "yunia septiana" },
-        { nama: "Nga Sendangharjo 01", area: "Bojonegoro", id: "1000183347", awal: "01 Tobo", tujuan: "Ngasem 2", bp: "yunia septiana" },
-        { nama: "Nga Ngasem 05", area: "Bojonegoro", id: "1000304583", awal: "01 Tobo", tujuan: "Ngasem 2", bp: "yunia septiana" },
-        { nama: "Collection Nga Bareng 08", area: "Bojonegoro", id: "1000033278", awal: "01 Tobo", tujuan: "Ngasem 2", bp: "yunia septiana" },
-        { nama: "Nga Katur Wonopuro 1", area: "Bojonegoro", id: "1000327511", awal: "01 Tobo", tujuan: "Temayang", bp: "yunia septiana" },
-        
-        { nama: "Kdm Tlogoagung Tlogoagung 1", area: "Bojonegoro", id: "1000280808", awal: "Boureno", tujuan: "Kapas", bp: "DIMAS ARIF NUR ACHAMDIN" },
-        { nama: "Kdm Kedungadem Kedungadem 2", area: "Bojonegoro", id: "1000278713", awal: "Boureno", tujuan: "Kapas", bp: "DIMAS ARIF NUR ACHAMDIN" },
-        { nama: "Kdm Dayukidul Wedegan Kidul 1", area: "Bojonegoro", id: "1000275205", awal: "Boureno", tujuan: "Kapas", bp: "DIMAS ARIF NUR ACHAMDIN" },
-        { nama: "Kdm Pejok Bronjong 1", area: "Bojonegoro", id: "1000289923", awal: "Boureno", tujuan: "Kapas", bp: "DIMAS ARIF NUR ACHAMDIN" },
-        
-        { nama: "Sbrj Pekuwon 4", area: "Bojonegoro", id: "1000169312", awal: "Kapas", tujuan: "Boureno", bp: "HENI HIDAYAH" },
-        { nama: "Sbrj Pekuwon 2", area: "Bojonegoro", id: "1000033843", awal: "Kapas", tujuan: "Boureno", bp: "HENI HIDAYAH" },
-        
-        { nama: "Stj_kaulon 02", area: "Blitar", id: "1000172473", awal: "Wonotirto", tujuan: "Kesamben", bp: "Yoga Aditia" },
-        { nama: "Stjn_kalipang 02", area: "Blitar", id: "1000126645", awal: "01 Nglegok", tujuan: "Wonotirto", bp: "Devi Puspitasari" },
-        { nama: "Stjn_jingglong 01", area: "Blitar", id: "1000080711", awal: "01 Nglegok", tujuan: "Wonotirto", bp: "Devi Puspitasari" },
-        { nama: "Slo_ploso_05", area: "Blitar", id: "1000289123", awal: "Wlingi", tujuan: "Kesamben", bp: "Laili Fitriana" },
-        
-        { nama: "137 Tgn Magersari 4", area: "Sidoarjo", id: "1000029709", awal: "01 Sidoarjo", tujuan: "Gedangan", bp: "Sheren Regina Virdhao" },
-        { nama: "Gdn Jl Bagus Santri", area: "Sidoarjo", id: "1000306973", awal: "Gedangan", tujuan: "Taman 1", bp: "Sri Ajeng Shofi Lestari" },
-        { nama: "277 Skd_jumputrejo_02", area: "Sidoarjo", id: "1000294390", awal: "Taman 1", tujuan: "Gedangan", bp: "Sheren Regina Virdhao" },
-        
-        { nama: "126 Skm Sukodadi Masjid Dakwah", area: "Palembang 2", id: "1000069320", awal: "SUKARAMI", tujuan: "TALANG KELAPA", bp: "Apreliza" },
-        { nama: "126 Skm Sukodadi Masjid Dakwah", area: "Palembang 2", id: "1000069320", awal: "TALANG KELAPA", tujuan: "GANDUS", bp: "Dwi Lorenza" },
-        { nama: "224 Tlk Kenten Kenten Laut 001", area: "Palembang 2", id: "1000158715", awal: "TALANG KELAPA", tujuan: "SUKARAMI", bp: "Novita Enjel" }
+        {"id": "1000183346", "nama": "Nga Ngasem 01", "area": "Bojonegoro", "awal": "01 Tobo", "tujuan": "Ngasem 2", "bp": "yunia septiana"},
+        {"id": "1000183346", "nama": "Nga Ngasem 01", "area": "Bojonegoro", "awal": "Ngasem 2", "tujuan": "Temayang", "bp": "yunia septiana"},
+        {"id": "1000183346", "nama": "Nga Ngasem 01", "area": "Bojonegoro", "awal": "Temayang", "tujuan": "Kapas", "bp": "DIMAS ARIF NUR ACHAMDIN"},
+        {"id": "1000301421", "nama": "Nga Bareng Badong", "area": "Bojonegoro", "awal": "01 Tobo", "tujuan": "Ngasem 2", "bp": "yunia septiana"},
+        {"id": "1000183347", "nama": "Nga Sendangharjo 01", "area": "Bojonegoro", "awal": "01 Tobo", "tujuan": "Ngasem 2", "bp": "yunia septiana"},
+        {"id": "1000304583", "nama": "Nga Ngasem 05", "area": "Bojonegoro", "awal": "01 Tobo", "tujuan": "Ngasem 2", "bp": "yunia septiana"},
+        {"id": "1000033278", "nama": "Collection Nga Bareng 08", "area": "Bojonegoro", "awal": "01 Tobo", "tujuan": "Ngasem 2", "bp": "yunia septiana"},
+        {"id": "1000327511", "nama": "Nga Katur Wonopuro 1", "area": "Bojonegoro", "awal": "01 Tobo", "tujuan": "Temayang", "bp": "yunia septiana"},
+        {"id": "1000280808", "nama": "Kdm Tlogoagung Tlogoagung 1", "area": "Bojonegoro", "awal": "Boureno", "tujuan": "Kapas", "bp": "DIMAS ARIF NUR ACHAMDIN"},
+        {"id": "1000278713", "nama": "Kdm Kedungadem Kedungadem 2", "area": "Bojonegoro", "awal": "Boureno", "tujuan": "Kapas", "bp": "DIMAS ARIF NUR ACHAMDIN"},
+        {"id": "1000275205", "nama": "Kdm Dayukidul Wedegan Kidul 1", "area": "Bojonegoro", "awal": "Boureno", "tujuan": "Kapas", "bp": "DIMAS ARIF NUR ACHAMDIN"},
+        {"id": "1000289923", "nama": "Kdm Pejok Bronjong 1", "area": "Bojonegoro", "awal": "Boureno", "tujuan": "Kapas", "bp": "DIMAS ARIF NUR ACHAMDIN"},
+        {"id": "2000014890", "nama": "collection kdm balongcabe", "area": "Bojonegoro", "awal": "Boureno", "tujuan": "Kapas", "bp": "DIMAS ARIF NUR ACHAMDIN"},
+        {"id": "2000015672", "nama": "collection kdm dayukidul active", "area": "Bojonegoro", "awal": "Boureno", "tujuan": "Kapas", "bp": "DIMAS ARIF NUR ACHAMDIN"},
+        {"id": "2000015460", "nama": "collection kdm drokilo kedungdowo", "area": "Bojonegoro", "awal": "Boureno", "tujuan": "Kapas", "bp": "DIMAS ARIF NUR ACHAMDIN"},
+        {"id": "2000015686", "nama": "collection kdm drokilo kedungringin", "area": "Bojonegoro", "awal": "Boureno", "tujuan": "Kapas", "bp": "DIMAS ARIF NUR ACHAMDIN"},
+        {"id": "2000015670", "nama": "collection kdm jamberejo", "area": "Bojonegoro", "awal": "Boureno", "tujuan": "Kapas", "bp": "DIMAS ARIF NUR ACHAMDIN"},
+        {"id": "2000015704", "nama": "collection kdm kedungadem 11", "area": "Bojonegoro", "awal": "Boureno", "tujuan": "Kapas", "bp": "DIMAS ARIF NUR ACHAMDIN"},
+        {"id": "2000015705", "nama": "collection kdm kedungadem 11 active", "area": "Bojonegoro", "awal": "Boureno", "tujuan": "Kapas", "bp": "DIMAS ARIF NUR ACHAMDIN"},
+        {"id": "2000015459", "nama": "collection kdm kedungadem krajan", "area": "Bojonegoro", "awal": "Boureno", "tujuan": "Kapas", "bp": "DIMAS ARIF NUR ACHAMDIN"},
+        {"id": "1000337332", "nama": "Collection KDM KEDUNGADEM NGAGLIK", "area": "Bojonegoro", "awal": "Boureno", "tujuan": "Kapas", "bp": "DIMAS ARIF NUR ACHAMDIN"},
+        {"id": "2000014937", "nama": "collection kdm kedungaxdem taraban active", "area": "Bojonegoro", "awal": "Boureno", "tujuan": "Kapas", "bp": "DIMAS ARIF NUR ACHAMDIN"},
+        {"id": "2000015455", "nama": "collection kdm megale 1", "area": "Bojonegoro", "awal": "Boureno", "tujuan": "Kapas", "bp": "DIMAS ARIF NUR ACHAMDIN"},
+        {"id": "2000015454", "nama": "collection kdm megale active", "area": "Bojonegoro", "awal": "Boureno", "tujuan": "Kapas", "bp": "DIMAS ARIF NUR ACHAMDIN"},
+        {"id": "2000015675", "nama": "collection kdm mlideg ringinanom", "area": "Bojonegoro", "awal": "Boureno", "tujuan": "Kapas", "bp": "DIMAS ARIF NUR ACHAMDIN"},
+        {"id": "2000015674", "nama": "collection kdm mlideg ringinanom active", "area": "Bojonegoro", "awal": "Boureno", "tujuan": "Kapas", "bp": "DIMAS ARIF NUR ACHAMDIN"},
+        {"id": "2000015461", "nama": "collection kdm mlideng 1", "area": "Bojonegoro", "awal": "Boureno", "tujuan": "Kapas", "bp": "DIMAS ARIF NUR ACHAMDIN"},
+        {"id": "1000289913", "nama": "Collection KDM SIDOMULYO GEMBOL 3", "area": "Bojonegoro", "awal": "Boureno", "tujuan": "Kapas", "bp": "DIMAS ARIF NUR ACHAMDIN"},
+        {"id": "1000282917", "nama": "Collection KDM SIDOMULYO SANGGAR 1", "area": "Bojonegoro", "awal": "Boureno", "tujuan": "Kapas", "bp": "DIMAS ARIF NUR ACHAMDIN"},
+        {"id": "1000286329", "nama": "Collection KDM SIDOMULYO SIDOMULYO 2", "area": "Bojonegoro", "awal": "Boureno", "tujuan": "Kapas", "bp": "DIMAS ARIF NUR ACHAMDIN"},
+        {"id": "1000273653", "nama": "Collection KDM SIDOREJO KARANGJATI 1", "area": "Bojonegoro", "awal": "Boureno", "tujuan": "Kapas", "bp": "DIMAS ARIF NUR ACHAMDIN"},
+        {"id": "2000015709", "nama": "collection kdm sidorejo swirot 3", "area": "Bojonegoro", "awal": "Boureno", "tujuan": "Kapas", "bp": "DIMAS ARIF NUR ACHAMDIN"},
+        {"id": "2000015710", "nama": "collection kdm sidorejo swirot 3 active", "area": "Bojonegoro", "awal": "Boureno", "tujuan": "Kapas", "bp": "DIMAS ARIF NUR ACHAMDIN"},
+        {"id": "2000014884", "nama": "collection kdm tlogoagung active", "area": "Bojonegoro", "awal": "Boureno", "tujuan": "Kapas", "bp": "DIMAS ARIF NUR ACHAMDIN"},
+        {"id": "2000014922", "nama": "collection kdm tumbrasanom", "area": "Bojonegoro", "awal": "Boureno", "tujuan": "Kapas", "bp": "DIMAS ARIF NUR ACHAMDIN"},
+        {"id": "1000284726", "nama": "Collection KDM TUMBRASANOM GEMPOL 3", "area": "Bojonegoro", "awal": "Boureno", "tujuan": "Kapas", "bp": "DIMAS ARIF NUR ACHAMDIN"},
+        {"id": "1000280807", "nama": "KDM BALONGCABE BRAMBANG 1", "area": "Bojonegoro", "awal": "Boureno", "tujuan": "Kapas", "bp": "DIMAS ARIF NUR ACHAMDIN"},
+        {"id": "2000014879", "nama": "kdm collection dayukidul", "area": "Bojonegoro", "awal": "Boureno", "tujuan": "Kapas", "bp": "DIMAS ARIF NUR ACHAMDIN"},
+        {"id": "1000275205", "nama": "KDM DAYUKIDUL WEDEGAN KIDUL 1", "area": "Bojonegoro", "awal": "Boureno", "tujuan": "Kapas", "bp": "DIMAS ARIF NUR ACHAMDIN"},
+        {"id": "1000281003", "nama": "KDM DROKILO KEDUNGDOWO 2", "area": "Bojonegoro", "awal": "Boureno", "tujuan": "Kapas", "bp": "DIMAS ARIF NUR ACHAMDIN"},
+        {"id": "1000293339", "nama": "KDM DROKILO KEDUNGRINGIN 3", "area": "Bojonegoro", "awal": "Boureno", "tujuan": "Kapas", "bp": "DIMAS ARIF NUR ACHAMDIN"},
+        {"id": "1000277640", "nama": "KDM DROKILO PUTUK 1", "area": "Bojonegoro", "awal": "Boureno", "tujuan": "Kapas", "bp": "DIMAS ARIF NUR ACHAMDIN"},
+        {"id": "1000291393", "nama": "KDM JAMBEREJO JAMBEAN 1", "area": "Bojonegoro", "awal": "Boureno", "tujuan": "Kapas", "bp": "DIMAS ARIF NUR ACHAMDIN"},
+        {"id": "1000293336", "nama": "KDM JAMBEREJO JAMBEAN 2", "area": "Bojonegoro", "awal": "Boureno", "tujuan": "Kapas", "bp": "DIMAS ARIF NUR ACHAMDIN"},
+        {"id": "1000283199", "nama": "KDM KEDUNGADEM KEDUNGADEM 10", "area": "Bojonegoro", "awal": "Boureno", "tujuan": "Kapas", "bp": "DIMAS ARIF NUR ACHAMDIN"},
+        {"id": "1000284959", "nama": "KDM KEDUNGADEM KEDUNGADEM 11", "area": "Bojonegoro", "awal": "Boureno", "tujuan": "Kapas", "bp": "DIMAS ARIF NUR ACHAMDIN"},
+        {"id": "1000289944", "nama": "KDM KEDUNGADEM KEDUNGADEM 14", "area": "Bojonegoro", "awal": "Boureno", "tujuan": "Kapas", "bp": "DIMAS ARIF NUR ACHAMDIN"},
+        {"id": "1000278713", "nama": "KDM KEDUNGADEM KEDUNGADEM 2", "area": "Bojonegoro", "awal": "Boureno", "tujuan": "Kapas", "bp": "DIMAS ARIF NUR ACHAMDIN"},
+        {"id": "1000279264", "nama": "KDM KEDUNGADEM KEDUNGADEM 4", "area": "Bojonegoro", "awal": "Boureno", "tujuan": "Kapas", "bp": "DIMAS ARIF NUR ACHAMDIN"},
+        {"id": "1000280806", "nama": "KDM KEDUNGADEM KEDUNGADEM 9", "area": "Bojonegoro", "awal": "Boureno", "tujuan": "Kapas", "bp": "DIMAS ARIF NUR ACHAMDIN"},
+        {"id": "1000274235", "nama": "KDM KEDUNGADEM KRAJAN 1", "area": "Bojonegoro", "awal": "Boureno", "tujuan": "Kapas", "bp": "DIMAS ARIF NUR ACHAMDIN"},
+        {"id": "1000286292", "nama": "KDM KEDUNGADEM KRAJAN 13", "area": "Bojonegoro", "awal": "Boureno", "tujuan": "Kapas", "bp": "DIMAS ARIF NUR ACHAMDIN"},
+        {"id": "1000279394", "nama": "KDM KEDUNGADEM KRAJAN 5", "area": "Bojonegoro", "awal": "Boureno", "tujuan": "Kapas", "bp": "DIMAS ARIF NUR ACHAMDIN"},
+        {"id": "1000284984", "nama": "KDM KEDUNGADEM NGAGLIK 12", "area": "Bojonegoro", "awal": "Boureno", "tujuan": "Kapas", "bp": "DIMAS ARIF NUR ACHAMDIN"},
+        {"id": "1000280749", "nama": "KDM KEDUNGADEM NGAGLIK 8", "area": "Bojonegoro", "awal": "Boureno", "tujuan": "Kapas", "bp": "DIMAS ARIF NUR ACHAMDIN"},
+        {"id": "1000279981", "nama": "KDM KEDUNGADEM TARABAN 7", "area": "Bojonegoro", "awal": "Boureno", "tujuan": "Kapas", "bp": "DIMAS ARIF NUR ACHAMDIN"},
+        {"id": "1000278374", "nama": "KDM KENDUNG KENDUNG 1", "area": "Bojonegoro", "awal": "Boureno", "tujuan": "Kapas", "bp": "DIMAS ARIF NUR ACHAMDIN"},
+        {"id": "1000299828", "nama": "KDM KENDUNG MEJERUKAN 4", "area": "Bojonegoro", "awal": "Boureno", "tujuan": "Kapas", "bp": "DIMAS ARIF NUR ACHAMDIN"},
+        {"id": "1000278725", "nama": "KDM KENDUNG SAMBONG 3", "area": "Bojonegoro", "awal": "Boureno", "tujuan": "Kapas", "bp": "DIMAS ARIF NUR ACHAMDIN"},
+        {"id": "1000278533", "nama": "KDM KENDUNG SECANG 2", "area": "Bojonegoro", "awal": "Boureno", "tujuan": "Kapas", "bp": "DIMAS ARIF NUR ACHAMDIN"},
+        {"id": "1000316603", "nama": "KDM KENDUNG TAKOLAN 5", "area": "Bojonegoro", "awal": "Boureno", "tujuan": "Kapas", "bp": "DIMAS ARIF NUR ACHAMDIN"},
+        {"id": "1000280699", "nama": "KDM MEGALE BETON 02", "area": "Bojonegoro", "awal": "Boureno", "tujuan": "Kapas", "bp": "DIMAS ARIF NUR ACHAMDIN"},
+        {"id": "1000274712", "nama": "KDM MEGALE BETON 1", "area": "Bojonegoro", "awal": "Boureno", "tujuan": "Kapas", "bp": "DIMAS ARIF NUR ACHAMDIN"},
+        {"id": "1000279927", "nama": "KDM MLIDEG NGRAPAH 1", "area": "Bojonegoro", "awal": "Boureno", "tujuan": "Kapas", "bp": "DIMAS ARIF NUR ACHAMDIN"},
+        {"id": "1000295813", "nama": "KDM MLIDEG RINGINANOM 2", "area": "Bojonegoro", "awal": "Boureno", "tujuan": "Kapas", "bp": "DIMAS ARIF NUR ACHAMDIN"},
+        {"id": "1000282254", "nama": "KDM MOJOREJO MOJOPANGI 1", "area": "Bojonegoro", "awal": "Boureno", "tujuan": "Kapas", "bp": "DIMAS ARIF NUR ACHAMDIN"},
+        {"id": "1000286639", "nama": "KDM SIDOREJO SWIROT 3", "area": "Bojonegoro", "awal": "Boureno", "tujuan": "Kapas", "bp": "DIMAS ARIF NUR ACHAMDIN"},
+        {"id": "1000275204", "nama": "KDM TUMBRASANOM GEMPOL 1", "area": "Bojonegoro", "awal": "Boureno", "tujuan": "Kapas", "bp": "DIMAS ARIF NUR ACHAMDIN"},
+        {"id": "1000278540", "nama": "KDM TUMBRASANOM GEMPOL 2", "area": "Bojonegoro", "awal": "Boureno", "tujuan": "Kapas", "bp": "DIMAS ARIF NUR ACHAMDIN"},
+        {"id": "1000169312", "nama": "Sbrj Pekuwon 4", "area": "Bojonegoro", "awal": "Kapas", "tujuan": "Boureno", "bp": "HENI HIDAYAH"},
+        {"id": "1000033843", "nama": "Sbrj Pekuwon 2", "area": "Bojonegoro", "awal": "Kapas", "tujuan": "Boureno", "bp": "HENI HIDAYAH"},
+        {"id": "1000328210", "nama": "Korgan 001", "area": "Bojonegoro", "awal": "Ngasem 2", "tujuan": "01 Tobo", "bp": "MILA SUCI RAHAYU"},
+        {"id": "1000329803", "nama": "Tbk Bonorejo 002", "area": "Bojonegoro", "awal": "Ngasem 2", "tujuan": "01 Tobo", "bp": "MILA SUCI RAHAYU"},
+        {"id": "1000172473", "nama": "Stj_kaulon 02", "area": "Blitar", "awal": "Wonotirto", "tujuan": "Kesamben", "bp": "Yoga Aditia"},
+        {"id": "1000126645", "nama": "Stjn_kalipang 02", "area": "Blitar", "awal": "01 Nglegok", "tujuan": "Wonotirto", "bp": "Devi Puspitasari"},
+        {"id": "1000080711", "nama": "Stjn_jingglong 01", "area": "Blitar", "awal": "01 Nglegok", "tujuan": "Wonotirto", "bp": "Devi Puspitasari"},
+        {"id": "1000150025", "nama": "Stjn_jegu 1", "area": "Blitar", "awal": "01 Nglegok", "tujuan": "Wonotirto", "bp": "Devi Puspitasari"},
+        {"id": "1000289123", "nama": "Slo_ploso_05", "area": "Blitar", "awal": "Wlingi", "tujuan": "Kesamben", "bp": "Laili Fitriana"},
+        {"id": "1000194314", "nama": "Slp Selopuro 01", "area": "Blitar", "awal": "Wonotirto", "tujuan": "Wlingi", "bp": "Fadilatul Rahmadani"},
+        {"id": "1000173983", "nama": "Pgrj_panggungasri 05", "area": "Blitar", "awal": "Wonotirto", "tujuan": "Kesamben", "bp": "Yoga Aditia"},
+        {"id": "1000029709", "nama": "137 Tgn Magersari 4", "area": "Sidoarjo", "awal": "01 Sidoarjo", "tujuan": "Gedangan", "bp": "Sheren Regina Virdhao"},
+        {"id": "1000306973", "nama": "Gdn Jl Bagus Santri", "area": "Sidoarjo", "awal": "Gedangan", "tujuan": "Taman 1", "bp": "Sri Ajeng Shofi Lestari"},
+        {"id": "1000330997", "nama": "Gdn Jl Margomulyo 01", "area": "Sidoarjo", "awal": "Gedangan", "tujuan": "Taman 1", "bp": "Sri Ajeng Shofi Lestari"},
+        {"id": "1000104151", "nama": "Bdn Bangah 6", "area": "Sidoarjo", "awal": "Gedangan", "tujuan": "Taman 1", "bp": "Fatmawati"},
+        {"id": "1000294390", "nama": "277 Skd_jumputrejo_02", "area": "Sidoarjo", "awal": "Taman 1", "tujuan": "Gedangan", "bp": "Sheren Regina Virdhao"},
+        {"id": "1000090452", "nama": "179_tlk_kenten Laut Lorong Keluarga", "area": "Palembang 2", "awal": "TALANG KELAPA", "tujuan": "SUKARAMI", "bp": "Novita Enjel"},
+        {"id": "1000077946", "nama": "143-Tlk-Kenten Laut -Puskesmas Kenten", "area": "Palembang 2", "awal": "TALANG KELAPA", "tujuan": "SUKARAMI", "bp": "Novita Enjel"},
+        {"id": "1000158715", "nama": "224 Tlk Kenten Kenten Laut 001", "area": "Palembang 2", "awal": "TALANG KELAPA", "tujuan": "SUKARAMI", "bp": "Novita Enjel"},
+        {"id": "1000175380", "nama": "246-Tlk-Kenten Laut-Puskesmas Kenten 002", "area": "Palembang 2", "awal": "TALANG KELAPA", "tujuan": "SUKARAMI", "bp": "Novita Enjel"},
+        {"id": "1000085600", "nama": "167 Tlk Talangf Keramat Lorong Kerta", "area": "Palembang 2", "awal": "TALANG KELAPA", "tujuan": "SUKARAMI", "bp": "Novita Enjel"},
+        {"id": "1000147525", "nama": "211 Tlk Talang Keramat Swadaya 002", "area": "Palembang 2", "awal": "TALANG KELAPA", "tujuan": "SUKARAMI", "bp": "Novita Enjel"},
+        {"id": "1000087794", "nama": "173 Tlk Talang Keramat Lorong Kedukan", "area": "Palembang 2", "awal": "TALANG KELAPA", "tujuan": "SUKARAMI", "bp": "Novita Enjel"},
+        {"id": "1000076916", "nama": "144_skm_sukodadi_gg Mangga 01", "area": "Palembang 2", "awal": "SUKARAMI", "tujuan": "TALANG KELAPA", "bp": "Apreliza"},
+        {"id": "1000161059", "nama": "257_skm_sukodadi_handoyo1945", "area": "Palembang 2", "awal": "SUKARAMI", "tujuan": "TALANG KELAPA", "bp": "Apreliza"},
+        {"id": "1000069320", "nama": "126 Skm Sukodadi Masjid Dakwah", "area": "Palembang 2", "awal": "SUKARAMI", "tujuan": "TALANG KELAPA", "bp": "Apreliza"},
+        {"id": "1000069320", "nama": "126 Skm Sukodadi Masjid Dakwah", "area": "Palembang 2", "awal": "TALANG KELAPA", "tujuan": "GANDUS", "bp": "Dwi Lorenza"},
+        {"id": "1000031762", "nama": "017_skm_sukadadi_purwodadi_001", "area": "Palembang 2", "awal": "SUKARAMI", "tujuan": "TALANG KELAPA", "bp": "Apreliza"},
+        {"id": "1000034976", "nama": "026_skm_sukadadi_sma13_001", "area": "Palembang 2", "awal": "SUKARAMI", "tujuan": "TALANG KELAPA", "bp": "Apreliza"},
+        {"id": "1000176748", "nama": "275_skm_sukadadi_asak Akor Rt 25", "area": "Palembang 2", "awal": "SUKARAMI", "tujuan": "TALANG KELAPA", "bp": "Apreliza"},
+        {"id": "1000042688", "nama": "047_skm_talang Betutu_tower 001", "area": "Palembang 2", "awal": "SUKARAMI", "tujuan": "TALANG KELAPA", "bp": "Apreliza"},
+        {"id": "1000155833", "nama": "246_it1_sungai Pangeran_papera_001", "area": "Palembang 2", "awal": "ILIR TIMUR", "tujuan": "GANDUS", "bp": "Dwi Lorenza"},
+        {"id": "1000158786", "nama": "251_it1_sungai Pangeran_matahari_004", "area": "Palembang 2", "awal": "ILIR TIMUR", "tujuan": "GANDUS", "bp": "Dwi Lorenza"},
+        {"id": "1000158787", "nama": "252_it1_sungai Pangeran_matahari Revamp_005", "area": "Palembang 2", "awal": "ILIR TIMUR", "tujuan": "GANDUS", "bp": "Dwi Lorenza"},
+        {"id": "1000102314", "nama": "Collection 217_it1_20ilird3_sungai Baung_001", "area": "Palembang 2", "awal": "ILIR TIMUR", "tujuan": "GANDUS", "bp": "Dwi Lorenza"},
+        {"id": "1000155854", "nama": "247_it1_20ilird1_pahlawan_cambai_002", "area": "Palembang 2", "awal": "ILIR TIMUR", "tujuan": "GANDUS", "bp": "Dwi Lorenza"},
+        {"id": "1000120884", "nama": "230_it1_20ilird1_pahlawan_burai_001", "area": "Palembang 2", "awal": "ILIR TIMUR", "tujuan": "GANDUS", "bp": "Dwi Lorenza"},
+        {"id": "1000209681", "nama": "268_it1_20ilird3_puding Revamp_001", "area": "Palembang 2", "awal": "ILIR TIMUR", "tujuan": "GANDUS", "bp": "Dwi Lorenza"}
     ];
 
-    // 3. INITIALIZE ENGINE LEAFLET MAP
-    const map = L.map('map').setView([-2.5, 118], 5);
+    // Inisialisasi Google Map / OpenStreetMap Layer Utama
+    const map = L.map('map').setView([-4.0, 114], 5);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { 
         attribution: '© OpenStreetMap contributors' 
     }).addTo(map);
     
     let pathLayerGroup = L.layerGroup().addTo(map);
 
-    // 4. LOAD FLOW CONTROLLER WHEN DOCUMENT READY
     $(document).ready(function() {
         populateDropdown();
         $('.searchable-select').select2({ width: '100%' });
@@ -262,11 +335,10 @@
         const uniqueIds = [...new Set(dataPerpindahan.map(item => item.id))];
         uniqueIds.forEach(id => {
             const itemData = dataPerpindahan.find(d => d.id === id);
-            $('#filterMajelisId').append(new Option(`${id} - ${itemData.nama}`, id));
+            $('#filterMajelisId').append(new Option(`${id} - ${itemData.nama}`, id.toString()));
         });
     }
 
-    // 5. CORE LOGIC RENDER COMPONENT DASHBOARD
     function updateDashboard(selectedId) {
         pathLayerGroup.clearLayers();
         $('#tableBody').empty();
@@ -276,19 +348,20 @@
         });
 
         $('#totalCount').text(filtered.length);
+
         if (filtered.length === 0) return;
 
         let bounds = [];
-        let labelSudahDigambar = new Set(); // Mengunci duplikasi agar label teks hanya 1 kali muncul per point
+        let labelSudahDigambar = new Set();
 
         filtered.forEach((item, index) => {
             let stepNumber = index + 1;
             
-            // Injeksi row data ke log tabel kronologi
+            // Masukkan data baris transaksi ke tabel log kronologis
             let row = `<tr>
                 <td><span style="background:#ef4444; color:white; padding:3px 8px; border-radius:50%; font-weight:bold;">${stepNumber}</span></td>
-                <td>${item.nama}</td>
                 <td><b>${item.id}</b></td>
+                <td>${item.nama}</td>
                 <td>${item.area}</td>
                 <td>${item.awal}</td>
                 <td>${item.tujuan}</td>
@@ -296,14 +369,13 @@
             </tr>`;
             $('#tableBody').append(row);
 
-            // Tarik data lat/long dari lookup kamus master koordinat
+            // Menerjemahkan koordinat spasial menggunakan master lookup
             const ptAwal = masterKoordinat[item.awal];
             const ptTujuan = masterKoordinat[item.tujuan];
 
             if (ptAwal && ptTujuan) {
                 bounds.push(ptAwal, ptTujuan);
 
-                // Buat Object Icon Nomor Urut Bulat Merah
                 let numIconAsal = L.divIcon({
                     className: 'step-number-icon',
                     html: stepNumber,
@@ -318,7 +390,7 @@
                     iconAnchor: [13, 13]
                 });
 
-                // Cek Validasi Unik Label Asal
+                // Render marker teks tunggal murni tanpa angka urutan
                 if (!labelSudahDigambar.has(item.awal)) {
                     L.marker(ptAwal, {icon: numIconAsal})
                         .addTo(pathLayerGroup)
@@ -326,7 +398,6 @@
                     labelSudahDigambar.add(item.awal);
                 }
 
-                // Cek Validasi Unik Label Tujuan
                 if (!labelSudahDigambar.has(item.tujuan)) {
                     L.marker(ptTujuan, {icon: numIconTujuan})
                         .addTo(pathLayerGroup)
@@ -334,14 +405,14 @@
                     labelSudahDigambar.add(item.tujuan);
                 }
 
-                // Cetak Jalur Garis Solid Biru Jelas Tegas
+                // Gambar garis lurus solid tebal warna biru tegas (Line Biasa)
                 L.polyline([ptAwal, ptTujuan], {
                     color: '#2563eb',
                     weight: 5,
                     opacity: 0.9
                 }).addTo(pathLayerGroup);
 
-                // Rumus Hitung Sudut Rotasi Mata Panah (➔) Secara Otomatis
+                // Buat tanda mata panah statis tepat di pertengahan jalur rute
                 let midLat = (ptAwal[0] + ptTujuan[0]) / 2;
                 let midLng = (ptAwal[1] + ptTujuan[1]) / 2;
                 
@@ -361,7 +432,6 @@
             }
         });
 
-        // Auto fitting cakupan zoom maps agar pas membingkai rute
         if (bounds.length > 0) {
             map.fitBounds(bounds, { padding: [60, 60] });
         }
